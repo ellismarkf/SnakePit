@@ -131,7 +131,7 @@ SnakePit.game = function() {
 // Game objects
 SnakePit.snake = function() {
 	let snake = this;
-	this.speed = 5;
+	this.speed = 1;
 	this.head = {
 		x: 50,
 		y: 0
