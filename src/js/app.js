@@ -1,19 +1,21 @@
 require('../css/app.css');
-import FastList from 'fast-list';
-import _ from 'lodash';
+import Lazy from 'lazy.js';
 
+// Create the canvas
 let canvas = document.getElementById('snakePit');
 let ctx = canvas.getContext("2d");
 canvas.height = 780;
 canvas.width = 780;
 
 export const SnakePit = {};
-SnakePit.fps = 8;
+SnakePit.fps = 30;
 SnakePit.cellWidth = 13;
 
 SnakePit.game = function() {
-	// Create the canvas
 	// game configuration
+	let last = new Date().getTime();
+	let dt = 1000 / 15;
+	let accumulator = 0;
 	let gameRunning = true;
 	let food = new SnakePit.food();
 	// init snake object
@@ -24,11 +26,10 @@ SnakePit.game = function() {
 		bindEvents();
 		snake1.init();
 		food.place();
-		console.log(food.coordinates.x, food.coordinates.y);
 		gameLoop();
 	}
 
-	function update(snake) {
+	function update(snake, dt) {
 		advanceSnake(snake);
 		checkCollision(snake);
 		checkSelfCollision(snake);
@@ -36,8 +37,8 @@ SnakePit.game = function() {
 
 	function advanceSnake( snake ) {
 		let newSnakeHeadPosition = {
-			x: snake.segments._head.data.x,
-			y: snake.segments._head.data.y
+			x: snake.segments[0].x,
+			y: snake.segments[0].y
 		};
 		let vectors = {
 			RIGHT : { x: 1, y: 0 },
@@ -51,6 +52,7 @@ SnakePit.game = function() {
 			newSnakeHeadPosition.y += currentVector.y;
 		}
 		snake.segments.unshift(newSnakeHeadPosition);
+		snake.head = snake.segments[0];
 		if( checkFoodCollision(snake, food)) {
 			snake.length += 1;
 		} else {
@@ -59,7 +61,7 @@ SnakePit.game = function() {
 	}
 
 	function checkCollision(snake){
-		let head = snake.segments._head.data;
+		let head = snake.segments[0];
 		if ( head.x < 0 ||
 			 head.y < 0 ||
 			 head.x >= (canvas.width / SnakePit.cellWidth) ||
@@ -69,29 +71,32 @@ SnakePit.game = function() {
 	}
 
 	function checkSelfCollision(snake){
-		let head = snake.segments._head.data;
-		let noCollision = snake.segments.reduce( (previousValue, currentSegment, index, segments) => {
-			let segmentsCollide = _.isEqual(head, currentSegment);
-			if (typeof previousValue === 'object') previousValue = true;
-			return previousValue && !segmentsCollide;
-		});
-		if (!noCollision) gameRunning = false;
+		// let head = snake.segments._head.data;
+		// let noCollision = Lazy(snake.segments).reduce( (previousValue, currentSegment, index, segments) => {
+		// 	let segmentsCollide = _.isEqual(head, currentSegment);
+		// 	if (typeof previousValue === 'object') previousValue = true;
+		// 	return previousValue && !segmentsCollide;
+		// });
+		gameRunning = Lazy(snake.segments).intersection(snake.head).length > 1 ? false : true;
+		// return collision;
+		// if (collision) gameRunning = false;
 	}
 
 	function checkFoodCollision(snake, food) {
-		let head = snake.segments._head.data;
-		if ( _.isEqual(head, food.coordinates) ) {
-			food.place();
-			if (SnakePit.fps < 60) SnakePit.fps += 1;
-			return true;
-		}
+		// let head = snake.segments[0];
+		return Lazy(snake.segments).contains(food.coordinates);
+		// if ( _.isEqual(head, food.coordinates) ) {
+		// 	food.place();
+		// 	if (SnakePit.fps < 60) SnakePit.fps += 1;
+		// 	return true;
+		// }
 	}
 
 	function draw() {
 		ctx.fillStyle = 'green';
 		ctx.strokeStyle = "white";
 
-		snake1.segments.forEach(function(segment, index){
+		Lazy(snake1.segments).each(function(segment, index){
 			ctx.fillRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
 			ctx.strokeRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
 		});
@@ -108,12 +113,20 @@ SnakePit.game = function() {
 
 	function gameLoop() {
 		if (!gameRunning) return;
-	   	update(snake1);
+		requestAnimationFrame(gameLoop);
+	   	let now = new Date().getTime();
+	   	let passed = now - last;
+	   	last = now;
+	   	accumulator += passed;
+	   	while (accumulator >= dt) {
+	   		update(snake1, dt);
+	   		accumulator -= dt;
+	   	}
 	   	clear();
 	   	draw();
-	   	setTimeout( () => {
-	   		requestAnimationFrame(gameLoop);
-	   	}, 1000 / SnakePit.fps);
+	   	// setTimeout( () => {
+	   	// 	requestAnimationFrame(gameLoop);
+	   	// }, 1000 / SnakePit.fps);
 	}
 
 	function bindEvents() {
@@ -151,16 +164,18 @@ SnakePit.snake = function() {
 	this.segmentSize = 10;
 	this.speed = 1;
 	this.length = 5;
-	this.segments = new FastList;
+	this.segments = [];
 	this.direction = 'RIGHT';
 	this.init = function() {
-		_.range(snake.length)
+		let snakeBody = Lazy.range(snake.length)
+			.toArray()
 			.map(function(segment, index){
-				snake.segments.push({
+				return {
 					x: snake.head.x - (index),
 					y: snake.head.y
-				});
+				};
 			});
+		snake.segments = snakeBody;
 	}
 
 	this.setDirection = function(newDirection) {
