@@ -88,12 +88,22 @@
 		let gameRunning = true;
 		let food = new SnakePit.food();
 		// init snake object
-		let snake1 = new SnakePit.snake();
+		let snake1 = new SnakePit.snake({
+			x: 20,
+			y: 20,
+			speed: 1
+		});
+		let snake2 = new SnakePit.snake({
+			x: 20,
+			y: 70,
+			speed: 3
+		});
 		var gameTime = Date.now();
 	
 		function init() {
 			bindEvents();
 			snake1.init();
+			snake2.init();
 			food.place();
 			gameLoop(performance.now());
 		}
@@ -130,6 +140,8 @@
 	
 			if (checkFoodCollision(snake, food)) {
 				snake.length += 1;
+				console.log('food eaten');
+				snake.speed += 1;
 			}
 		}
 	
@@ -186,6 +198,12 @@
 				ctx.strokeRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
 			});
 	
+			ctx.fillStyle = 'blue';
+			snake2.segments.forEach(function (segment, index) {
+				ctx.fillRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
+				ctx.strokeRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
+			});
+	
 			ctx.fillStyle = 'red';
 			ctx.fillRect(food.coordinates.x * SnakePit.cellWidth, food.coordinates.y * SnakePit.cellWidth, 10, 10);
 			ctx.strokeRect(food.coordinates.x * SnakePit.cellWidth, food.coordinates.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
@@ -208,6 +226,7 @@
 			}
 	
 			queueUpdates(numTicks, snake1);
+			queueUpdates(numTicks, snake2);
 			clear();
 			draw();
 			SnakePit.lastRender = tFrame;
@@ -246,15 +265,15 @@
 	};
 	
 	// Game objects
-	SnakePit.snake = function () {
+	SnakePit.snake = function (options) {
 		let snake = this;
 		this.head = {
-			x: 20,
-			y: 20
+			x: options.x,
+			y: options.y
 		};
 		this.pivots = [];
 		this.segmentSize = 10;
-		this.speed = 1;
+		this.speed = options.speed;
 		this.length = 5;
 		this.segments = [];
 		this.direction = 'RIGHT';
