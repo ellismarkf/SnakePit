@@ -4,12 +4,16 @@ import _ from 'lodash';
 
 let canvas = document.getElementById('snakePit');
 let ctx = canvas.getContext("2d");
-canvas.height = 780;
-canvas.width = 780;
+canvas.height = 800;
+canvas.width = 800;
 
 export const SnakePit = {};
-SnakePit.fps = 3;
-SnakePit.cellWidth = 13;
+SnakePit.fps = 1/60;
+SnakePit.cellWidth = 10;
+SnakePit.lastTick = performance.now();
+SnakePit.tickLength = 50;
+SnakePit.lastRender = SnakePit.lastTick;
+
 
 SnakePit.game = function() {
 	// Create the canvas
@@ -24,46 +28,64 @@ SnakePit.game = function() {
 		bindEvents();
 		snake1.init();
 		food.place();
-		gameLoop();
+		gameLoop(performance.now());
 	}
 
-	function update(now, snake) {
-		advanceSnake(now, snake);
+	function update(snake) {
+		advanceSnake(snake);
 		checkCollision(snake);
-		//checkSelfCollision(snake);
+		checkSelfCollision(snake);
+		if (snake.pivots.length > 10) snake.trimPivots();
 	}
 
-	function advanceSnake(now, snake) {
-		let newSnakeHeadPosition = {
-			x: snake.segments._head.data.x,
-			y: snake.segments._head.data.y
-		};
+	function advanceSnake(snake) {
 		let vectors = {
-			RIGHT : { x: 1, y: 0 },
-			LEFT  : { x: -1, y: 0 },
-			UP    : { x: 0, y: -1 },
-			DOWN  : { x: 0, y: 1 }
+			RIGHT : { x: snake.speed, y: 0 },
+			LEFT  : { x: -snake.speed, y: 0 },
+			UP    : { x: 0, y: -snake.speed },
+			DOWN  : { x: 0, y: snake.speed }
 		};
-		let currentVector = vectors[snake.direction];
-		if(now % 3 <= 0){
-			if ( currentVector ) {
-				newSnakeHeadPosition.x += (currentVector.x);
-				newSnakeHeadPosition.y += (currentVector.y);
+
+		snake.segments.map( (segment, index) => {
+			let segVector = vectors[segment.direction];
+			let snakePivot = checkPivots(snake, segment);
+			if (snakePivot.collides) {
+				let pivot = snakePivot.pivot;
+				let newSegVector = vectors[pivot.direction];
+				segment.direction = pivot.direction;
+				segment.x += newSegVector.x;
+				segment.y += newSegVector.y;
+			} else {
+				segment.x += segVector.x;
+				segment.y += segVector.y;
 			}
-		 
-		
-		snake.segments.unshift(newSnakeHeadPosition);
+		});
+
 		if( checkFoodCollision(snake, food)) {
 			snake.length += 1;
-		} else {
-			snake.segments.pop();
 		}
 	}
-	console.log(now);
+
+	function matchingPivot(snake, segment) {
+		if (snake.pivots.length === 0) return false;
+		let segCoords = {
+			x: segment.x,
+			y: segment.y
+		};
+		let pivot = _.find(snake.pivots, (pivot) => {
+			let pivotCoords = { x: pivot.x, y: pivot.y };
+			return _.isEqual(pivotCoords, segCoords);
+		});
+		return pivot;
 	}
 
-	function checkCollision(snake){
-		let head = snake.segments._head.data;
+	function checkPivots(snake, segment) {
+		let pivot = matchingPivot(snake, segment);
+		return pivot !== undefined && pivot !== false ? { collides: true, pivot: pivot} : false;
+	}
+
+	function checkCollision(snake) {
+		let head = snake.segments[0];
 		if ( head.x < 0 ||
 			 head.y < 0 ||
 			 head.x >= (canvas.width / SnakePit.cellWidth) ||
@@ -73,7 +95,7 @@ SnakePit.game = function() {
 	}
 
 	function checkSelfCollision(snake){
-		let head = snake.segments._head.data;
+		let head = snake.segments[0];
 		let noCollision = snake.segments.reduce( (previousValue, currentSegment, index, segments) => {
 			let segmentsCollide = _.isEqual(head, currentSegment);
 			if (typeof previousValue === 'object') previousValue = true;
@@ -83,10 +105,10 @@ SnakePit.game = function() {
 	}
 
 	function checkFoodCollision(snake, food) {
-		let head = snake.segments._head.data;
+		let head = snake.segments[0];
 		if ( _.isEqual(head, food.coordinates) ) {
 			food.place();
-			if (SnakePit.fps < 60) SnakePit.fps += 1;
+			if (snake.speed < 20) snake.speed += 0.01667;
 			return true;
 		}
 	}
@@ -110,18 +132,28 @@ SnakePit.game = function() {
 		ctx.fillRect(0,0, canvas.height, canvas.width);
 	}
 
-	function gameLoop() {
+	function gameLoop(tFrame) {
 		if (!gameRunning) return;
+   		requestAnimationFrame(gameLoop);
+   		let numTicks = 0;
+   		let nextTick = SnakePit.lastTick + SnakePit.tickLength;
 
-		var now = Math.round(Date.now()/50);
-		var delta = (now - then)/1000;
-		var then = now;
-		update(now, snake1);
+   		if (tFrame > nextTick) {
+   			let timeSinceTick = tFrame - SnakePit.lastTick;
+   			numTicks = Math.floor( timeSinceTick / SnakePit.tickLength );
+   		}
+
+		queueUpdates(numTicks, snake1)
 	   	clear();
 	   	draw();
-	   	setTimeout( () => {
-	   		requestAnimationFrame(gameLoop);
-	   	}, 1000 / SnakePit.fps);
+	   	SnakePit.lastRender = tFrame;
+	}
+
+	function queueUpdates( numTicks, snake ) {
+		for(var i = 0; i < numTicks; i++) {
+			SnakePit.lastTick = SnakePit.lastTick + SnakePit.tickLength;
+			update(snake, SnakePit.lastTick);
+		}
 	}
 
 	function bindEvents() {
@@ -137,7 +169,8 @@ SnakePit.game = function() {
 	      let direction = controls[key];
 
 	      if (direction) {
-	        snake1.setDirection(direction);
+	        snake1.checkDirection(direction);
+	        snake1.addPivot(direction, snake1.segments[0]);
 	      }
 	      else if (key === 32) {
 	        gameRunning = false;
@@ -156,32 +189,43 @@ SnakePit.snake = function() {
 		x: 20,
 		y: 20
 	};
+	this.pivots = [];
 	this.segmentSize = 10;
 	this.speed = 1;
 	this.length = 5;
-	this.segments = new FastList;
+	this.segments = [];
 	this.direction = 'RIGHT';
 	this.init = function() {
 		_.range(snake.length)
-			.map(function(segment, index){
-				snake.segments.push({
-					x: snake.head.x - (index),
-					y: snake.head.y
-				});
-			});
+		 .map(function(segment, index){
+		 	snake.segments.push({
+		 		x: snake.head.x - (index),
+		 		y: snake.head.y,
+		 		direction: snake.direction
+		 	});
+	 	});
 	}
 
-	this.setDirection = function(newDirection) {
+	this.checkDirection = function(newDirection) {
   		let oppositeDirections = {
 		  	LEFT: 'RIGHT',
 		  	RIGHT: 'LEFT',
 		  	UP: 'DOWN',
 		  	DOWN: 'UP'
 	  	}
-
-  		if (newDirection !== oppositeDirections[snake.direction]) {
-	  		snake.direction = newDirection;
-	  	}
+	  	// console.log('newDirection', newDirection, 'snakeDirection:', snake.segments[0].direction);
+	  	// console.log('newDirectionAllowed:', newDirection !== oppositeDirections[snake.segments[0].direction]);
+  		// if (newDirection !== oppositeDirections[snake.segments[0].direction]) {
+	  	// 	// snake.segments[0].direction = newDirection;
+	  	// 	return true;
+	  	// }
+	  	return newDirection !== oppositeDirections[snake.segments[0].direction] ? true : false;
+	}
+	this.addPivot = function(direction, headPos) {
+		snake.pivots.push({x: headPos.x, y: headPos.y, direction: direction});
+	}
+	this.trimPivots = function() {
+		snake.pivots = _.takeRight(snake.pivots, 5);
 	}
 };
 
