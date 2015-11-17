@@ -93,26 +93,27 @@
 			y: 20,
 			speed: 1
 		});
-		let snake2 = new SnakePit.snake({
-			x: 20,
-			y: 70,
-			speed: 3
-		});
-		var gameTime = Date.now();
+		// let snake2 = new SnakePit.snake({
+		// 	x: 20,
+		// 	y: 70,
+		// 	speed: 3
+		// });
+		// var gameTime = Date.now();
 	
 		function init() {
 			bindEvents();
 			snake1.init();
-			snake2.init();
+			// snake2.init();
 			food.place();
 			gameLoop(performance.now());
 		}
 	
 		function update(snake) {
 			advanceSnake(snake);
+			console.log(snake.pivots);
 			checkCollision(snake);
 			checkSelfCollision(snake);
-			if (snake.pivots.length > 10) snake.trimPivots();
+			// if (snake.pivots.length > 10) snake.trimPivots();
 		}
 	
 		function advanceSnake(snake) {
@@ -132,6 +133,12 @@
 					segment.direction = pivot.direction;
 					segment.x += newSegVector.x;
 					segment.y += newSegVector.y;
+					pivot.segmentsPassed += 1;
+					console.log(`pivot passed through ${ pivot.segmentsPassed } segments`);
+					if (pivot.segmentsPassed === snake.segments.length) {
+						console.log('removing pivot');
+						snake.removePivot(pivot);
+					}
 				} else {
 					segment.x += segVector.x;
 					segment.y += segVector.y;
@@ -181,8 +188,11 @@
 		}
 	
 		function checkFoodCollision(snake, food) {
-			let head = snake.segments[0];
-			if (_lodash2.default.isEqual(head, food.coordinates)) {
+			let headPos = {
+				x: snake.segments[0].x,
+				y: snake.segments[0].y
+			};
+			if (_lodash2.default.isEqual(headPos, food.coordinates)) {
 				food.place();
 				if (snake.speed < 20) snake.speed += 0.01667;
 				return true;
@@ -198,11 +208,11 @@
 				ctx.strokeRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
 			});
 	
-			ctx.fillStyle = 'blue';
-			snake2.segments.forEach(function (segment, index) {
-				ctx.fillRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
-				ctx.strokeRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
-			});
+			// ctx.fillStyle = 'blue';
+			// snake2.segments.forEach(function(segment, index){
+			// 	ctx.fillRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
+			// 	ctx.strokeRect(segment.x * SnakePit.cellWidth, segment.y * SnakePit.cellWidth, snake1.segmentSize, snake1.segmentSize);
+			// });
 	
 			ctx.fillStyle = 'red';
 			ctx.fillRect(food.coordinates.x * SnakePit.cellWidth, food.coordinates.y * SnakePit.cellWidth, 10, 10);
@@ -226,7 +236,7 @@
 			}
 	
 			queueUpdates(numTicks, snake1);
-			queueUpdates(numTicks, snake2);
+			// queueUpdates(numTicks, snake2);
 			clear();
 			draw();
 			SnakePit.lastRender = tFrame;
@@ -303,10 +313,15 @@
 			return newDirection !== oppositeDirections[snake.segments[0].direction] ? true : false;
 		};
 		this.addPivot = function (direction, headPos) {
-			snake.pivots.push({ x: headPos.x, y: headPos.y, direction: direction });
+			snake.pivots.push({ x: headPos.x, y: headPos.y, direction: direction, segmentsPassed: 0 });
 		};
 		this.trimPivots = function () {
 			snake.pivots = _lodash2.default.takeRight(snake.pivots, 5);
+		};
+		this.removePivot = function (expiredPivot) {
+			snake.pivots = _lodash2.default.remove(snake.pivots, pivot => {
+				return _lodash2.default.isEqual(pivot, expiredPivot);
+			});
 		};
 	};
 	
